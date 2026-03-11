@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>N26 - Interface Bancaire</title>
-    <!-- Favicon mis à jour : Logo N26 Noir -->
+    <!-- Favicon : Logo N26 Noir -->
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/N26_logo_black.svg/256px-N26_logo_black.svg.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -12,20 +12,42 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
+        // Initialisation globale
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'n26-fictiv-carole';
-
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
+        // Variables globales partagées
         window.db = db;
-        window.dbUtils = { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, appId };
+        window.dbUtils = { collection, addDoc, onSnapshot, query, serverTimestamp, appId };
+        window.authReady = false;
 
-        signInAnonymously(auth).catch(err => console.error("Erreur Auth:", err));
+        // Processus d'authentification obligatoire avant toute opération
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Erreur d'authentification Firebase:", error);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.authReady = true;
+                console.log("Connecté en tant que:", user.uid);
+            }
+        });
+
+        initAuth();
     </script>
 
     <style>
@@ -53,7 +75,7 @@
         <div class="w-full max-w-sm space-y-4 slide-up">
             <input type="email" id="user-email" value="caroleyver3@gmail.com" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-white outline-none focus:bg-white focus:text-black transition-all" placeholder="Email">
             <input type="password" id="user-pass" value="221292" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-white outline-none focus:bg-white focus:text-black transition-all" placeholder="Mot de passe">
-            <button onclick="handleLogin()" class="w-full bg-white text-[#00635d] font-bold py-4 rounded-xl shadow-xl hover:bg-gray-100 transition-colors active:scale-95">Se connecter</button>
+            <button onclick="handleLogin()" id="login-btn" class="w-full bg-white text-[#00635d] font-bold py-4 rounded-xl shadow-xl hover:bg-gray-100 transition-colors active:scale-95">Se connecter</button>
         </div>
         <p class="text-[10px] opacity-40 mt-10">© 2024 N26 Bank AG</p>
     </div>
@@ -70,27 +92,25 @@
                 </div>
                 <div class="relative">
                     <i onclick="toggleAccountMenu()" class="fa-solid fa-bars cursor-pointer"></i>
-                    <!-- Menu Déroulant (Hamburger) -->
                     <div id="account-dropdown" class="hidden absolute top-full right-0 mt-4 w-64 bg-white shadow-2xl rounded-2xl p-2 border border-gray-100 z-50">
-                        <div onclick="switchAccount('courant')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center">
-                            <span class="font-medium text-sm text-gray-800">Compte courant</span>
+                        <div onclick="switchAccount('courant')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center text-gray-800">
+                            <span class="font-medium text-sm">Compte courant</span>
                             <i class="fa-solid fa-wallet text-gray-400"></i>
                         </div>
-                        <div onclick="switchAccount('epargne')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center border-b mb-1">
-                            <span class="font-medium text-sm text-gray-800">Épargne</span>
+                        <div onclick="switchAccount('epargne')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center border-b mb-1 text-gray-800">
+                            <span class="font-medium text-sm">Épargne</span>
                             <span class="text-[10px] text-gray-400">1 400,00 €</span>
                         </div>
                         <div onclick="toggleModal('virement-modal'); toggleAccountMenu();" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center">
                             <span class="font-medium text-sm text-n26-green">Virement</span>
                             <i class="fa-solid fa-paper-plane text-n26-green text-xs"></i>
                         </div>
-                        <div onclick="toggleModal('services-modal'); toggleAccountMenu();" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center">
-                            <span class="font-medium text-sm text-gray-800">Nos services</span>
+                        <div onclick="toggleModal('services-modal'); toggleAccountMenu();" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center text-gray-800">
+                            <span class="font-medium text-sm">Nos services</span>
                             <i class="fa-solid fa-grid-2 text-gray-400 text-xs"></i>
                         </div>
                     </div>
                 </div>
-                <!-- Bouton de déconnexion corrigé -->
                 <i onclick="location.reload()" class="fa-solid fa-right-from-bracket text-red-400 cursor-pointer"></i>
             </div>
             <div id="search-container" class="hidden absolute left-0 right-0 top-full bg-white p-4 border-b fade-in shadow-xl">
@@ -123,22 +143,25 @@
 
             <div class="space-y-4">
                 <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Historique</h4>
+                <div id="additional-history" class="space-y-4"></div>
+                
                 <div class="transaction-item bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center group cursor-pointer hover:border-gray-200 transition-all">
                     <div class="flex items-center space-x-4">
                         <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500"><i class="fa-solid fa-globe"></i></div>
                         <div>
                             <p class="font-bold text-gray-800 trans-name">Internet</p>
-                            <p class="text-xs text-gray-400">Achat sécurisé</p>
+                            <p class="text-xs text-gray-400">Achat sécurisé • Hier</p>
                         </div>
                     </div>
                     <p class="font-bold text-gray-900">-25,00 €</p>
                 </div>
+                
                 <div class="transaction-item bg-white p-4 rounded-2xl border border-emerald-100 flex justify-between items-center group cursor-pointer">
                     <div class="flex items-center space-x-4">
                         <div class="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600"><i class="fa-solid fa-money-bill-transfer"></i></div>
                         <div>
                             <p class="font-bold text-gray-800 trans-name">Salaire</p>
-                            <p class="text-xs text-gray-400">Virement entrant</p>
+                            <p class="text-xs text-gray-400">Virement entrant • 2 Mars</p>
                         </div>
                     </div>
                     <p class="font-extrabold text-emerald-600">+2 027,00 €</p>
@@ -146,7 +169,6 @@
             </div>
         </main>
 
-        <!-- Footer corrigé : Boutons accessibles -->
         <footer class="bg-white border-t p-4 flex justify-around items-center text-gray-300">
             <i onclick="location.reload()" class="fa-solid fa-house text-n26-green cursor-pointer"></i>
             <i onclick="toggleModal('stats-modal')" class="fa-solid fa-chart-pie cursor-pointer hover:text-gray-600"></i>
@@ -158,7 +180,7 @@
         </footer>
     </div>
 
-    <!-- INTERFACE GESTIONNAIRE (ADMIN) -->
+    <!-- INTERFACE GESTIONNAIRE -->
     <div id="manager-app" class="hidden min-h-screen flex flex-col fade-in bg-zinc-900 text-white">
         <header class="p-6 border-b border-white/10 flex justify-between items-center bg-zinc-800">
             <div>
@@ -177,104 +199,18 @@
                 </div>
             </div>
 
-            <div id="manager-chat-messages" class="flex-1 overflow-y-auto space-y-4 p-4 rounded-2xl bg-black/20 border border-white/5 mb-4">
-                <!-- Messages synchronisés ici -->
-            </div>
+            <div id="manager-chat-messages" class="flex-1 overflow-y-auto space-y-4 p-4 rounded-2xl bg-black/20 border border-white/5 mb-4"></div>
 
             <div class="p-4 bg-zinc-800 rounded-2xl border border-white/10">
-                <form onsubmit="sendChatMessage(event, 'manager')" class="flex items-center space-x-3">
+                <form id="manager-form" onsubmit="sendChatMessage(event, 'manager')" class="flex items-center space-x-3">
                     <input type="text" id="manager-chat-input" required class="flex-1 bg-zinc-700 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Répondre à Carole...">
-                    <button type="submit" class="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl text-sm hover:bg-emerald-400 transition-colors">Envoyer</button>
+                    <button type="submit" id="manager-send-btn" class="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl text-sm hover:bg-emerald-400 transition-colors">Envoyer</button>
                 </form>
             </div>
         </main>
     </div>
 
-    <!-- MODAL STATISTIQUES -->
-    <div id="stats-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-lg rounded-[30px] p-8 slide-up">
-            <div class="flex justify-between items-center mb-8">
-                <h3 class="text-2xl font-bold text-gray-900">Analyses</h3>
-                <button onclick="toggleModal('stats-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
-            </div>
-            <div class="space-y-6 text-center py-6">
-                <i class="fa-solid fa-chart-line text-5xl text-gray-200 mb-4"></i>
-                <p class="text-gray-500">Synthèse mensuelle : +2.4% ce mois-ci.</p>
-                <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div class="h-full bg-emerald-500" style="width: 75%"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL PROFIL -->
-    <div id="profile-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-lg rounded-[30px] p-8 slide-up">
-            <div class="flex justify-between items-center mb-8">
-                <h3 class="text-2xl font-bold text-gray-900">Mon Profil</h3>
-                <button onclick="toggleModal('profile-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
-            </div>
-            <div class="flex flex-col items-center mb-6">
-                <div class="w-20 h-20 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-3xl font-bold mb-4">YC</div>
-                <h4 class="text-xl font-bold text-gray-900">Yver Carole</h4>
-                <p class="text-sm text-gray-400">caroleyver3@gmail.com</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL VIREMENT -->
-    <div id="virement-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-lg rounded-t-[30px] sm:rounded-[30px] p-8 slide-up relative">
-            <div id="virement-loading" class="hidden absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center rounded-[30px]">
-                <div class="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-                <p class="font-bold text-gray-600">Traitement du virement...</p>
-            </div>
-
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-gray-900">Nouveau virement</h3>
-                <button onclick="toggleModal('virement-modal')" class="text-gray-300 hover:text-gray-500">
-                    <i class="fa-solid fa-circle-xmark text-2xl"></i>
-                </button>
-            </div>
-
-            <div class="space-y-4">
-                <input type="text" id="vir-nom" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Nom du bénéficiaire">
-                <input type="text" id="vir-banque" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Banque">
-                <input type="text" id="vir-iban" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="IBAN">
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="vir-montant" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Montant">
-                    <input type="text" id="vir-motif" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Motif">
-                </div>
-                <button onclick="executerVirement()" class="w-full n26-bg-green text-white font-bold py-4 rounded-2xl shadow-lg mt-4 active:scale-95 transition-transform">
-                    Confirmer le virement
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL SERVICES -->
-    <div id="services-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-lg rounded-[30px] p-8 slide-up max-h-[80vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-8">
-                <h3 class="text-2xl font-bold text-gray-900">Nos Services</h3>
-                <button onclick="toggleModal('services-modal')" class="text-gray-300 hover:text-gray-500">
-                    <i class="fa-solid fa-circle-xmark text-2xl"></i>
-                </button>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col items-center text-center space-y-2">
-                    <i class="fa-solid fa-credit-card text-emerald-600 text-xl"></i>
-                    <p class="text-xs font-bold text-emerald-900">Gestion de carte</p>
-                </div>
-                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col items-center text-center space-y-2">
-                    <i class="fa-solid fa-shield-halved text-gray-600 text-xl"></i>
-                    <p class="text-xs font-bold text-gray-900">Assurances</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL MESSAGERIE (VUE CLIENT) -->
+    <!-- MODAL MESSAGERIE (CLIENT) -->
     <div id="message-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
         <div class="bg-white w-full max-w-lg rounded-t-[30px] sm:rounded-[30px] p-0 slide-up flex flex-col h-[85vh]">
             <div class="p-6 border-b flex justify-between items-center">
@@ -285,14 +221,12 @@
                 <button onclick="toggleModal('message-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
             </div>
 
-            <div id="client-chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-                <!-- Messages synchronisés ici -->
-            </div>
+            <div id="client-chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50"></div>
 
             <div class="p-4 bg-white border-t">
-                <form onsubmit="sendChatMessage(event, 'client')" class="flex items-center space-x-2">
+                <form id="client-form" onsubmit="sendChatMessage(event, 'client')" class="flex items-center space-x-2">
                     <input type="text" id="client-chat-input" required class="flex-1 bg-gray-100 rounded-full px-4 py-3 text-sm outline-none" placeholder="Message...">
-                    <button type="submit" class="w-10 h-10 n26-bg-green text-white rounded-full flex items-center justify-center shadow-lg"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                    <button type="submit" id="client-send-btn" class="w-10 h-10 n26-bg-green text-white rounded-full flex items-center justify-center shadow-lg"><i class="fa-solid fa-paper-plane text-xs"></i></button>
                 </form>
             </div>
         </div>
@@ -306,9 +240,26 @@
             <div class="chip my-8"><div class="chip-inner"></div></div>
             <p class="text-white text-xl tracking-[4px] font-mono mb-4">5355 9012 •••• 5678</p>
             <p class="text-white text-sm font-semibold uppercase tracking-wider">Yver Carole</p>
-            <div class="absolute bottom-6 right-6 flex">
-                <div class="w-10 h-10 bg-[#eb001b] rounded-full mix-blend-screen opacity-90"></div>
-                <div class="w-10 h-10 bg-[#f79e1b] rounded-full -ml-4 mix-blend-screen opacity-90"></div>
+        </div>
+    </div>
+
+    <!-- MODAL VIREMENT AVEC IBAN ET MOTIF -->
+    <div id="virement-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-white w-full max-w-lg rounded-t-[30px] sm:rounded-[30px] p-8 slide-up relative">
+            <div id="virement-loading" class="hidden absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center rounded-[30px]">
+                <div class="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
+                <p class="font-bold text-gray-600">Traitement du virement...</p>
+            </div>
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900">Nouveau virement</h3>
+                <button onclick="toggleModal('virement-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="vir-nom" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Nom du bénéficiaire">
+                <input type="text" id="vir-iban" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="IBAN du bénéficiaire">
+                <input type="number" id="vir-montant" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Montant en euros">
+                <input type="text" id="vir-motif" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Motif du virement (optionnel)">
+                <button onclick="executerVirement()" class="w-full n26-bg-green text-white font-bold py-4 rounded-2xl shadow-lg mt-2 transition-transform active:scale-95">Confirmer le virement</button>
             </div>
         </div>
     </div>
@@ -320,6 +271,7 @@
         const savingsBalanceVal = "1 400,00 €";
         let currentAccount = "courant";
 
+        // GESTION SECRÈTE DES INTERFACES
         function headerSecretTap() {
             const currentTime = new Date().getTime();
             const tapDelay = currentTime - lastTapTime;
@@ -338,6 +290,7 @@
             currentUserType = 'manager';
             document.getElementById('client-app').classList.add('hidden');
             document.getElementById('manager-app').classList.remove('hidden');
+            document.getElementById('notif-badge').classList.add('hidden');
         }
 
         function switchToClient() {
@@ -348,45 +301,35 @@
 
         function handleLogin() {
             const email = document.getElementById('user-email').value;
-            document.getElementById('login-screen').classList.add('hidden');
-            if(email === 'rgiselle360@gmail.com') switchToManager();
-            else {
-                currentUserType = 'client';
-                document.getElementById('client-app').classList.remove('hidden');
-            }
-            initChatListener();
+            const btn = document.getElementById('login-btn');
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                document.getElementById('login-screen').classList.add('hidden');
+                if(email === 'rgiselle360@gmail.com') switchToManager();
+                else switchToClient();
+                initChatListener();
+            }, 1000);
         }
 
-        function toggleModal(id) { 
-            const el = document.getElementById(id);
-            if (el) el.classList.toggle('hidden'); 
-        }
-
-        function toggleAccountMenu() { 
-            const menu = document.getElementById('account-dropdown');
-            if (menu) menu.classList.toggle('hidden'); 
-        }
-
-        function toggleSearch() { 
-            const search = document.getElementById('search-container');
-            if (search) search.classList.toggle('hidden'); 
-        }
-
-        function switchAccount(type) {
-            currentAccount = type;
-            const label = document.getElementById('current-account-label');
-            const balanceEl = document.getElementById('main-balance');
-            label.innerText = type === 'courant' ? "Compte courant" : "Épargne";
-            balanceEl.innerText = type === 'courant' ? mainBalanceVal : savingsBalanceVal;
-            toggleAccountMenu();
-        }
-
+        // MESSAGERIE FONCTIONNELLE
         async function sendChatMessage(e, sender) {
             e.preventDefault();
+            if (!window.authReady || !window.db) return;
+
             const inputId = sender === 'client' ? 'client-chat-input' : 'manager-chat-input';
+            const btnId = sender === 'client' ? 'client-send-btn' : 'manager-send-btn';
             const input = document.getElementById(inputId);
+            const btn = document.getElementById(btnId);
             const messageText = input.value.trim();
+            
             if (!messageText) return;
+
+            const originalBtnContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
             const { db, dbUtils } = window;
             try {
@@ -401,30 +344,43 @@
                     fetch("https://formspree.io/f/mwvrljpr", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: 'caroleyver3@gmail.com', message: messageText })
-                    });
+                        body: JSON.stringify({ email: 'caroleyver3@gmail.com', message: messageText, _subject: "Nouveau message de Carole Yver" })
+                    }).catch(e => console.log("Formspree fallback fail"));
                 }
+                
                 input.value = "";
-            } catch (err) { console.error("Erreur Firestore :", err); }
+            } catch (err) {
+                console.error("Erreur d'envoi Firestore :", err);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnContent;
+            }
         }
 
         function initChatListener() {
             const { db, dbUtils } = window;
-            const q = dbUtils.query(
-                dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages'),
-                dbUtils.orderBy('timestamp', 'asc')
-            );
+            const q = dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages');
 
             dbUtils.onSnapshot(q, (snapshot) => {
                 const clientChat = document.getElementById('client-chat-messages');
                 const managerChat = document.getElementById('manager-chat-messages');
                 
                 if (clientChat && managerChat) {
+                    let messages = [];
+                    snapshot.forEach((doc) => {
+                        messages.push({ id: doc.id, ...doc.data() });
+                    });
+
+                    messages.sort((a, b) => {
+                        const timeA = a.timestamp?.seconds || 0;
+                        const timeB = b.timestamp?.seconds || 0;
+                        return timeA - timeB;
+                    });
+
                     clientChat.innerHTML = '';
                     managerChat.innerHTML = '';
 
-                    snapshot.forEach((doc) => {
-                        const data = doc.data();
+                    messages.forEach((data) => {
                         const isManager = data.sender === 'manager';
                         
                         const clientMsg = document.createElement('div');
@@ -438,10 +394,35 @@
                         managerChat.appendChild(managerMsg);
                     });
 
+                    const lastMsg = messages[messages.length - 1];
+                    if (lastMsg && lastMsg.sender !== currentUserType) {
+                        const modalHidden = document.getElementById('message-modal').classList.contains('hidden');
+                        if (modalHidden && currentUserType === 'client') {
+                            document.getElementById('notif-badge').classList.remove('hidden');
+                        }
+                    }
+
                     clientChat.scrollTop = clientChat.scrollHeight;
                     managerChat.scrollTop = managerChat.scrollHeight;
                 }
             });
+        }
+
+        // UTILITAIRES INTERFACE
+        function toggleModal(id) { 
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden'); 
+            if (id === 'message-modal') document.getElementById('notif-badge').classList.add('hidden');
+        }
+
+        function toggleAccountMenu() { document.getElementById('account-dropdown').classList.toggle('hidden'); }
+        function toggleSearch() { document.getElementById('search-container').classList.toggle('hidden'); }
+
+        function switchAccount(type) {
+            currentAccount = type;
+            document.getElementById('current-account-label').innerText = type === 'courant' ? "Compte courant" : "Épargne";
+            document.getElementById('main-balance').innerText = type === 'courant' ? mainBalanceVal : savingsBalanceVal;
+            toggleAccountMenu();
         }
 
         function toggleBalanceVisibility() {
@@ -456,6 +437,46 @@
             }
         }
 
+        function executerVirement() {
+            const nom = document.getElementById('vir-nom').value;
+            const iban = document.getElementById('vir-iban').value;
+            const montant = document.getElementById('vir-montant').value;
+            const motif = document.getElementById('vir-motif').value;
+            
+            if(!nom || !montant) return;
+
+            document.getElementById('virement-loading').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('virement-loading').classList.add('hidden');
+                toggleModal('virement-modal');
+                const history = document.getElementById('additional-history');
+                const newEntry = document.createElement('div');
+                newEntry.className = "transaction-item bg-white p-4 rounded-2xl border border-red-100 flex justify-between items-center fade-in";
+                
+                // On inclut les détails du motif et la date "Aujourd'hui"
+                const description = motif ? `Motif : ${motif} • Aujourd'hui` : `Virement • Aujourd'hui`;
+                
+                newEntry.innerHTML = `
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500">
+                            <i class="fa-solid fa-circle-exclamation text-xs"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800 trans-name">Échec de virement</p>
+                            <p class="text-[10px] text-gray-400">Vers : ${nom} • ${description}</p>
+                        </div>
+                    </div>
+                    <p class="font-bold text-gray-400 text-sm">Annulé</p>`;
+                history.prepend(newEntry);
+                
+                // Clear inputs
+                document.getElementById('vir-nom').value = "";
+                document.getElementById('vir-iban').value = "";
+                document.getElementById('vir-montant').value = "";
+                document.getElementById('vir-motif').value = "";
+            }, 3000);
+        }
+
         function filterTransactions() {
             const query = document.getElementById('transaction-search').value.toLowerCase();
             const items = document.querySelectorAll('.transaction-item');
@@ -465,24 +486,6 @@
             });
         }
 
-        function executerVirement() {
-            const nom = document.getElementById('vir-nom').value;
-            if(!nom) return;
-            document.getElementById('virement-loading').classList.remove('hidden');
-            setTimeout(() => {
-                document.getElementById('virement-loading').classList.add('hidden');
-                toggleModal('virement-modal');
-                // Alerte simulation
-                const history = document.getElementById('history-list');
-                const newEntry = document.createElement('div');
-                newEntry.className = "transaction-item bg-white p-4 rounded-2xl border border-red-100 flex justify-between items-center fade-in";
-                newEntry.innerHTML = `<div class="flex items-center space-x-4"><div class="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500"><i class="fa-solid fa-circle-exclamation text-xs"></i></div><div><p class="font-bold text-gray-800 trans-name">Échec de virement</p><p class="text-[10px] text-gray-400">Vers : ${nom}</p></div></div><p class="font-bold text-gray-400 text-sm">Annulé</p>`;
-                history.prepend(newEntry);
-                document.getElementById('notif-badge').classList.remove('hidden');
-            }, 5000);
-        }
-
-        // Fermeture au clic extérieur
         window.onclick = function(event) {
             const modals = ['virement-modal', 'services-modal', 'message-modal', 'card-modal', 'stats-modal', 'profile-modal'];
             modals.forEach(id => {
