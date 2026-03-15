@@ -4,497 +4,561 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>N26 - Interface Bancaire</title>
-    <!-- Favicon : Logo N26 Noir -->
+    
+    <!-- Favicon N26 Noir -->
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/N26_logo_black.svg/256px-N26_logo_black.svg.png">
+    
+    <!-- Bibliothèques Externes -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- Firebase SDK -->
+    <!-- Intégration Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
-        // Initialisation globale
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'n26-fictiv-carole';
+        const firebaseConfig = {
+            apiKey: "AIzaSyBixmCMZ9Z2w8alxNl6diDoI5ldqooQl3g",
+            authDomain: "banque-n26.firebaseapp.com",
+            projectId: "banque-n26",
+            storageBucket: "banque-n26.firebasestorage.app",
+            messagingSenderId: "328520092115",
+            appId: "1:328520092115:web:946c15cdc8156292db4726",
+            measurementId: "G-XMG5J7SRCZ"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        let storage = null;
+        try { storage = getStorage(app); } catch (e) { console.warn("Storage non configuré."); }
 
-        // Variables globales partagées
         window.db = db;
-        window.dbUtils = { collection, addDoc, onSnapshot, query, serverTimestamp, appId };
-        window.authReady = false;
-
-        // Processus d'authentification obligatoire avant toute opération
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Erreur d'authentification Firebase:", error);
-            }
-        };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                window.authReady = true;
-                console.log("Connecté en tant que:", user.uid);
-            }
-        });
-
-        initAuth();
+        window.storage = storage;
+        window.dbUtils = { collection, addDoc, onSnapshot, query, serverTimestamp, appId: "banque-n26", doc, updateDoc, deleteDoc, ref, uploadBytesResumable, getDownloadURL };
+        
+        signInAnonymously(auth).then(() => {
+            console.log("Connecté à Firebase");
+        }).catch(err => console.error("Erreur Auth:", err));
     </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; user-select: none; }
-        .n26-bg-green { background-color: #00635d; }
+        body { font-family: 'Inter', sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .n26-green { background-color: #00635d; }
         .n26-text-green { color: #00635d; }
-        .card-visa { background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); border: 1px solid rgba(255,255,255,0.1); position: relative; overflow: hidden; }
-        .chip { width: 48px; height: 36px; background: linear-gradient(135deg, #fcd34d 0%, #b45309 100%); border-radius: 6px; position: relative; box-shadow: inset 0 0 5px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.3); border: 0.5px solid rgba(0,0,0,0.1); }
-        .chip-inner { position: absolute; top: 25%; left: 10%; right: 10%; bottom: 25%; border: 1px solid rgba(0,0,0,0.15); border-radius: 4px; }
-        .fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .slide-up { animation: slideUp 0.4s ease-out; }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .pulse-audio { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 99, 93, 0.4); } 70% { box-shadow: 0 0 0 30px rgba(0, 99, 93, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 99, 93, 0); } }
+        .bubble-self { background-color: #00635d; color: white; border-bottom-right-radius: 4px; }
+        .bubble-other { background-color: white; color: #333; border-bottom-left-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* Design Carte Metal Premium */
+        .n26-metal-card { 
+            background: linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%); 
+            position: relative; 
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .n26-metal-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+            opacity: 0.1;
+        }
+        .n26-metal-card::after { 
+            content: ''; 
+            position: absolute; 
+            top: -50%; 
+            left: -50%; 
+            width: 200%; 
+            height: 200%; 
+            background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.03) 50%, transparent 55%); 
+            animation: shine 8s infinite; 
+        }
+        @keyframes shine { 0% { transform: translateX(-30%) translateY(-30%); } 100% { transform: translateX(30%) translateY(30%); } }
+        
+        /* Puce EMV Stylisée */
+        .emv-chip {
+            width: 50px;
+            height: 40px;
+            background: linear-gradient(135deg, #f5d061 0%, #e6b31e 100%);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .chip-line {
+            position: absolute;
+            background: rgba(0,0,0,0.15);
+        }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 overflow-hidden">
 
-    <!-- PAGE DE CONNEXION -->
-    <div id="login-screen" class="n26-bg-green fixed inset-0 z-50 flex flex-col items-center justify-center py-12 px-8 text-white">
-        <h1 class="text-5xl font-bold tracking-tighter mb-20 underline decoration-2 underline-offset-8">N26</h1>
-        
-        <div class="w-full max-w-sm space-y-4 slide-up">
-            <input type="email" id="user-email" value="caroleyver3@gmail.com" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-white outline-none focus:bg-white focus:text-black transition-all" placeholder="Email">
-            <input type="password" id="user-pass" value="221292" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-white outline-none focus:bg-white focus:text-black transition-all" placeholder="Mot de passe">
-            <button onclick="handleLogin()" id="login-btn" class="w-full bg-white text-[#00635d] font-bold py-4 rounded-xl shadow-xl hover:bg-gray-100 transition-colors active:scale-95">Se connecter</button>
+    <!-- ÉCRAN DE CONNEXION -->
+    <div id="login-screen" class="n26-green fixed inset-0 z-[200] flex flex-col items-center justify-center p-8 text-white">
+        <div class="mb-12 text-center">
+            <h1 class="text-6xl font-bold tracking-tighter">N26</h1>
+            <p class="mt-2 opacity-60 text-xs tracking-widest font-medium uppercase">Gestion Bancaire</p>
         </div>
-        <p class="text-[10px] opacity-40 mt-10">© 2024 N26 Bank AG</p>
+        <div class="w-full max-w-sm space-y-4">
+            <input type="email" id="user-email" value="caroleyver3@gmail.com" class="w-full bg-white/10 border border-white/20 rounded-2xl p-5 text-white placeholder-white/50 outline-none" placeholder="E-mail">
+            <input type="password" id="user-pass" value="221292" class="w-full bg-white/10 border border-white/20 rounded-2xl p-5 text-white placeholder-white/50 outline-none" placeholder="Code secret">
+            <button onclick="handleLogin()" class="w-full bg-white text-[#00635d] font-bold py-5 rounded-2xl shadow-2xl active:scale-[0.98] transition-all">S'identifier</button>
+        </div>
     </div>
 
     <!-- INTERFACE CLIENT (CAROLE) -->
-    <div id="client-app" class="hidden min-h-screen flex flex-col fade-in">
-        <header class="bg-white sticky top-0 z-30 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 onclick="headerSecretTap()" class="text-xl font-bold text-gray-800 cursor-pointer active:opacity-50 transition-opacity">Accueil</h2>
-            <div class="flex items-center space-x-5 text-gray-500 text-lg">
-                <i onclick="toggleSearch()" class="fa-solid fa-magnifying-glass cursor-pointer"></i>
-                <div class="relative cursor-pointer" onclick="toggleModal('message-modal')">
-                    <i class="fa-solid fa-envelope"></i>
-                    <span id="notif-badge" class="hidden absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </div>
-                <div class="relative">
-                    <i onclick="toggleAccountMenu()" class="fa-solid fa-bars cursor-pointer"></i>
-                    <div id="account-dropdown" class="hidden absolute top-full right-0 mt-4 w-64 bg-white shadow-2xl rounded-2xl p-2 border border-gray-100 z-50">
-                        <div onclick="switchAccount('courant')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center text-gray-800">
-                            <span class="font-medium text-sm">Compte courant</span>
-                            <i class="fa-solid fa-wallet text-gray-400"></i>
-                        </div>
-                        <div onclick="switchAccount('epargne')" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center border-b mb-1 text-gray-800">
-                            <span class="font-medium text-sm">Épargne</span>
-                            <span class="text-[10px] text-gray-400">1 400,00 €</span>
-                        </div>
-                        <div onclick="toggleModal('virement-modal'); toggleAccountMenu();" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center">
-                            <span class="font-medium text-sm text-n26-green">Virement</span>
-                            <i class="fa-solid fa-paper-plane text-n26-green text-xs"></i>
-                        </div>
-                        <div onclick="toggleModal('services-modal'); toggleAccountMenu();" class="p-3 hover:bg-gray-50 rounded-xl cursor-pointer flex justify-between items-center text-gray-800">
-                            <span class="font-medium text-sm">Nos services</span>
-                            <i class="fa-solid fa-grid-2 text-gray-400 text-xs"></i>
-                        </div>
+    <div id="client-app" class="hidden h-screen flex flex-col fade-in">
+        <header class="bg-white px-6 py-5 border-b flex justify-between items-center shadow-sm sticky top-0 z-40">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="toggleSecretSwitch()">
+                <div class="flex items-center">
+                    <div class="flex flex-col items-center leading-none">
+                        <div class="w-6 h-[2px] bg-n26-green mb-0.5"></div>
+                        <span class="text-n26-text-green font-black text-xl">N</span>
+                        <div class="w-6 h-[2px] bg-n26-green mt-0.5"></div>
                     </div>
+                    <span class="text-n26-text-green font-black text-xl ml-1">26</span>
                 </div>
-                <i onclick="location.reload()" class="fa-solid fa-right-from-bracket text-red-400 cursor-pointer"></i>
+                <h2 class="text-xl font-bold text-gray-800 ml-1 tracking-tight">Bienvenue Carole</h2>
             </div>
-            <div id="search-container" class="hidden absolute left-0 right-0 top-full bg-white p-4 border-b fade-in shadow-xl">
-                <input type="text" id="transaction-search" onkeyup="filterTransactions()" placeholder="Rechercher..." class="w-full bg-gray-100 rounded-xl p-3 outline-none">
+            <div class="flex items-center space-x-6 text-gray-400">
+                <div class="relative cursor-pointer" onclick="toggleModal('notif-modal')">
+                    <i class="fa-solid fa-bell text-2xl"></i>
+                    <span id="notif-badge" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
+                </div>
+                <i onclick="location.reload()" class="fa-solid fa-right-from-bracket text-xl cursor-pointer"></i>
             </div>
         </header>
 
-        <main class="flex-1 p-6 max-w-2xl mx-auto w-full space-y-8">
-            <h3 class="text-2xl font-bold text-gray-900" id="current-account-label">Compte courant</h3>
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="flex items-center space-x-3">
-                        <h1 id="main-balance" class="text-4xl font-extrabold tracking-tight text-gray-900">865 537,00 €</h1>
-                        <i onclick="toggleBalanceVisibility()" id="eye-icon" class="fa-solid fa-eye text-gray-300 cursor-pointer"></i>
-                    </div>
-                    <p class="text-gray-400 text-sm mt-1">Solde actuel</p>
-                </div>
-                <button onclick="toggleModal('card-modal')" class="bg-black text-white px-6 py-2 rounded-full font-bold text-sm shadow-lg">Carte</button>
-            </div>
-
-            <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IBAN</p>
-                        <p class="font-mono text-sm text-gray-700">FR80 1234 5678 910X XXXX</p>
-                    </div>
-                    <i class="fa-regular fa-copy text-gray-300"></i>
-                </div>
-            </div>
-
-            <div class="space-y-4">
-                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Historique</h4>
-                <div id="additional-history" class="space-y-4"></div>
-                
-                <div class="transaction-item bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center group cursor-pointer hover:border-gray-200 transition-all">
-                    <div class="flex items-center space-x-4">
-                        <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500"><i class="fa-solid fa-globe"></i></div>
-                        <div>
-                            <p class="font-bold text-gray-800 trans-name">Internet</p>
-                            <p class="text-xs text-gray-400">Achat sécurisé • Hier</p>
-                        </div>
-                    </div>
-                    <p class="font-bold text-gray-900">-25,00 €</p>
-                </div>
-                
-                <div class="transaction-item bg-white p-4 rounded-2xl border border-emerald-100 flex justify-between items-center group cursor-pointer">
-                    <div class="flex items-center space-x-4">
-                        <div class="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600"><i class="fa-solid fa-money-bill-transfer"></i></div>
-                        <div>
-                            <p class="font-bold text-gray-800 trans-name">Salaire</p>
-                            <p class="text-xs text-gray-400">Virement entrant • 2 Mars</p>
-                        </div>
-                    </div>
-                    <p class="font-extrabold text-emerald-600">+2 027,00 €</p>
-                </div>
-            </div>
+        <!-- ZONE DE CONTENU DYNAMIQUE -->
+        <main id="client-main-content" class="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
+            <!-- Injecté par JS -->
         </main>
 
-        <footer class="bg-white border-t p-4 flex justify-around items-center text-gray-300">
-            <i onclick="location.reload()" class="fa-solid fa-house text-n26-green cursor-pointer"></i>
-            <i onclick="toggleModal('stats-modal')" class="fa-solid fa-chart-pie cursor-pointer hover:text-gray-600"></i>
-            <div onclick="toggleModal('virement-modal')" class="w-12 h-12 bg-n26-bg-green rounded-full flex items-center justify-center text-white shadow-lg -mt-8 border-4 border-gray-50 cursor-pointer hover:scale-105 transition-transform">
-                <i class="fa-solid fa-plus"></i>
+        <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-100 p-5 flex justify-around items-center text-gray-400 z-[60]">
+            <div onclick="switchTab('home')" class="footer-icon flex flex-col items-center space-y-1 cursor-pointer transition-colors text-n26-text-green" id="nav-home">
+                <i class="fa-solid fa-house-user text-2xl"></i>
+                <span class="text-[9px] font-bold uppercase">Accueil</span>
             </div>
-            <i onclick="toggleModal('card-modal')" class="fa-solid fa-credit-card cursor-pointer hover:text-gray-600"></i>
-            <i onclick="toggleModal('profile-modal')" class="fa-solid fa-user cursor-pointer hover:text-gray-600"></i>
+            <div onclick="switchTab('insights')" class="footer-icon flex flex-col items-center space-y-1 cursor-pointer transition-colors" id="nav-insights">
+                <i class="fa-solid fa-chart-pie text-2xl"></i>
+                <span class="text-[9px] font-bold uppercase">Analyses</span>
+            </div>
+            <div onclick="toggleModal('transfer-modal')" class="w-14 h-14 n26-green rounded-full flex items-center justify-center text-white shadow-xl -mt-14 border-4 border-gray-50 active:scale-90 transition-transform cursor-pointer">
+                <i class="fa-solid fa-plus text-2xl"></i>
+            </div>
+            <div onclick="switchTab('cards')" class="footer-icon flex flex-col items-center space-y-1 cursor-pointer transition-colors" id="nav-cards">
+                <i class="fa-solid fa-credit-card text-2xl"></i>
+                <span class="text-[9px] font-bold uppercase">Cartes</span>
+            </div>
+            <div onclick="switchTab('profile')" class="footer-icon flex flex-col items-center space-y-1 cursor-pointer transition-colors" id="nav-profile">
+                <i class="fa-solid fa-user-gear text-2xl"></i>
+                <span class="text-[9px] font-bold uppercase">Profil</span>
+            </div>
         </footer>
     </div>
 
-    <!-- INTERFACE GESTIONNAIRE -->
-    <div id="manager-app" class="hidden min-h-screen flex flex-col fade-in bg-zinc-900 text-white">
-        <header class="p-6 border-b border-white/10 flex justify-between items-center bg-zinc-800">
-            <div>
-                <h2 onclick="managerSecretTap()" class="text-xl font-bold cursor-pointer active:opacity-50 transition-opacity">N26 Staff Control</h2>
-                <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Connecté : Giselle R.</p>
-            </div>
-            <i onclick="location.reload()" class="fa-solid fa-power-off text-red-500 text-xl cursor-pointer"></i>
-        </header>
-
-        <main class="flex-1 p-6 flex flex-col max-w-4xl mx-auto w-full overflow-hidden">
-            <div class="flex items-center space-x-3 mb-6 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-                <div class="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center text-black font-bold">YC</div>
+    <!-- INTERFACE GESTIONNAIRE (ADMIN) -->
+    <div id="manager-app" class="hidden h-screen flex flex-col fade-in bg-zinc-950 text-white">
+        <header class="p-6 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20 shadow-lg"><i class="fa-solid fa-shield-halved text-xl"></i></div>
                 <div>
-                    <h3 class="font-bold text-sm">Chat avec Carole Yver</h3>
-                    <p class="text-[10px] opacity-60">caroleyver3@gmail.com • ID: 8829102-YC</p>
+                    <h2 onclick="toggleSecretSwitch()" class="text-lg font-bold tracking-tight">Gestionnaire N26</h2>
+                    <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Giselle R. • En ligne</p>
                 </div>
             </div>
-
-            <div id="manager-chat-messages" class="flex-1 overflow-y-auto space-y-4 p-4 rounded-2xl bg-black/20 border border-white/5 mb-4"></div>
-
-            <div class="p-4 bg-zinc-800 rounded-2xl border border-white/10">
-                <form id="manager-form" onsubmit="sendChatMessage(event, 'manager')" class="flex items-center space-x-3">
-                    <input type="text" id="manager-chat-input" required class="flex-1 bg-zinc-700 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Répondre à Carole...">
-                    <button type="submit" id="manager-send-btn" class="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl text-sm hover:bg-emerald-400 transition-colors">Envoyer</button>
+            <i onclick="startCall('manager')" class="fa-solid fa-phone-volume text-emerald-400 text-2xl cursor-pointer hover:scale-110 p-3"></i>
+        </header>
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <div id="manager-chat-view" class="flex-1 overflow-y-auto p-5 space-y-4"></div>
+            <div class="p-5 bg-zinc-900 border-t border-white/5 flex items-center space-x-3">
+                <button onclick="triggerFileSelect()" class="text-zinc-500"><i class="fa-solid fa-paperclip text-xl"></i></button>
+                <form onsubmit="handleSend(event, 'manager')" class="flex-1 flex space-x-2">
+                    <input type="text" id="manager-msg-input" class="flex-1 bg-zinc-800 border-none rounded-2xl px-5 py-4 text-sm outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Message...">
+                    <button type="submit" class="bg-emerald-500 text-black w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"><i class="fa-solid fa-paper-plane text-sm"></i></button>
                 </form>
             </div>
         </main>
     </div>
 
-    <!-- MODAL MESSAGERIE (CLIENT) -->
-    <div id="message-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-lg rounded-t-[30px] sm:rounded-[30px] p-0 slide-up flex flex-col h-[85vh]">
-            <div class="p-6 border-b flex justify-between items-center">
-                <div>
-                    <h3 class="text-xl font-bold">Mon Gestionnaire</h3>
-                    <div class="flex items-center text-[10px] text-emerald-500 font-bold"><span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>EN LIGNE</div>
+    <!-- MODAL CENTRE DE NOTIFICATIONS -->
+    <div id="notif-modal" class="hidden fixed inset-0 z-[100] flex items-start justify-center bg-black/40 backdrop-blur-sm pt-20 px-4">
+        <div class="bg-white w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl max-h-[70vh] flex flex-col">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+                <h3 class="font-bold text-lg text-gray-800">Notifications</h3>
+                <button onclick="toggleModal('notif-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
+            </div>
+            <div id="notif-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <p class="text-center text-gray-400 text-xs py-10" id="no-notif-msg">Aucune nouvelle notification</p>
+            </div>
+            <div class="p-4 bg-gray-50 border-t text-center">
+                <button onclick="clearNotifs()" class="text-[10px] font-bold text-n26-text-green uppercase tracking-widest">Tout effacer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RELEVÉ BANCAIRE -->
+    <div id="statement-modal" class="hidden fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-2xl rounded-lg p-8 sm:p-12 shadow-2xl relative my-10">
+            <button onclick="toggleModal('statement-modal')" class="absolute top-6 right-6 text-gray-300 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-3xl"></i></button>
+            
+            <div class="flex justify-between items-start mb-12">
+                <div class="flex items-center">
+                    <div class="flex flex-col items-center leading-none">
+                        <div class="w-8 h-[2.5px] bg-black mb-1"></div>
+                        <span class="text-black font-black text-4xl tracking-tighter">N</span>
+                        <div class="w-8 h-[2.5px] bg-black mt-1"></div>
+                    </div>
+                    <span class="text-black font-black text-4xl ml-1 tracking-tighter">26</span>
                 </div>
-                <button onclick="toggleModal('message-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
+                <div class="text-right">
+                    <h1 class="text-2xl font-bold uppercase tracking-widest text-gray-800">Relevé officiel</h1>
+                    <p class="text-gray-400 text-xs">Mars 2026</p>
+                </div>
             </div>
 
-            <div id="client-chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-10 mb-12 border-b border-gray-100 pb-10">
+                <div>
+                    <h4 class="text-[10px] font-bold text-gray-400 uppercase mb-3 text-left">Titulaire</h4>
+                    <p class="font-bold text-lg text-gray-900 leading-tight text-left">Carole Yver</p>
+                    <p class="text-sm text-gray-500 mt-1 italic text-left">12 Avenue des Champs-Élysées, Paris</p>
+                </div>
+                <div class="sm:text-right">
+                    <h4 class="text-[10px] font-bold text-gray-400 uppercase mb-3 sm:text-right text-left">Détails Compte</h4>
+                    <p class="text-xs text-gray-600 text-left sm:text-right">IBAN : <span class="font-mono text-black font-bold">FR80 1234 5678 910X XXXX</span></p>
+                </div>
+            </div>
 
-            <div class="p-4 bg-white border-t">
-                <form id="client-form" onsubmit="sendChatMessage(event, 'client')" class="flex items-center space-x-2">
-                    <input type="text" id="client-chat-input" required class="flex-1 bg-gray-100 rounded-full px-4 py-3 text-sm outline-none" placeholder="Message...">
-                    <button type="submit" id="client-send-btn" class="w-10 h-10 n26-bg-green text-white rounded-full flex items-center justify-center shadow-lg"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+            <table class="w-full text-left mb-16">
+                <thead>
+                    <tr class="text-[11px] font-bold text-gray-400 uppercase border-b border-gray-100">
+                        <th class="py-4 font-black">Date</th>
+                        <th class="py-4 font-black">Libellé</th>
+                        <th class="py-4 text-right font-black">Montant</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    <tr class="border-b border-gray-50">
+                        <td class="py-5 text-gray-400 font-medium">02 Mar</td>
+                        <td class="py-5 font-bold text-gray-800">Salaire Mensuel • N26 SAS</td>
+                        <td class="py-5 text-right text-emerald-600 font-black">+2 027,00 €</td>
+                    </tr>
+                    <tr class="border-b border-gray-50">
+                        <td class="py-5 text-gray-400 font-medium">05 Mar</td>
+                        <td class="py-5 font-bold text-gray-800">Loyer Appartement Paris</td>
+                        <td class="py-5 text-right text-gray-900 font-black">-1 200,00 €</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="bg-gray-50 p-8 rounded-3xl flex justify-between items-center border border-gray-100 mb-12">
+                <span class="font-bold text-gray-700">Solde créditeur</span>
+                <span class="text-3xl font-black text-gray-900">865 537,00 €</span>
+            </div>
+            
+            <div class="flex justify-center">
+                <button onclick="toggleModal('statement-modal')" class="bg-black text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl">
+                    Fermer le relevé
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTRES MODALS -->
+    <div id="chat-modal" class="hidden fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="bg-gray-100 w-full max-w-lg rounded-t-[40px] sm:rounded-[40px] flex flex-col h-[90vh] overflow-hidden shadow-2xl">
+            <div class="p-6 bg-white border-b flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-n26-text-green font-bold text-xl shadow-inner">G</div>
+                    <div><h3 class="font-bold text-gray-800">Conseiller N26</h3><p class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">En ligne</p></div>
+                </div>
+                <div class="flex items-center space-x-5">
+                    <i class="fa-solid fa-phone text-gray-300 hover:text-n26-text-green text-xl cursor-pointer" onclick="startCall('client')"></i>
+                    <i onclick="toggleModal('chat-modal')" class="fa-solid fa-circle-xmark text-gray-200 text-3xl cursor-pointer"></i>
+                </div>
+            </div>
+            <div id="client-chat-view" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+            <div class="p-5 bg-white border-t flex items-center space-x-3 pb-12 sm:pb-5">
+                <button onclick="triggerFileSelect()" class="text-gray-300 px-2"><i class="fa-solid fa-circle-plus text-4xl"></i></button>
+                <form onsubmit="handleSend(event, 'client')" class="flex-1 flex space-x-2">
+                    <input type="text" id="client-msg-input" class="flex-1 bg-gray-50 rounded-2xl px-5 py-4 text-sm outline-none" placeholder="Message...">
+                    <button type="submit" class="n26-green text-white w-14 h-14 rounded-2xl flex items-center justify-center"><i class="fa-solid fa-paper-plane text-sm"></i></button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- MODAL CARTE -->
-    <div id="card-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
-        <div class="w-full max-w-sm card-visa rounded-[20px] p-6 shadow-2xl relative slide-up">
-            <button onclick="toggleModal('card-modal')" class="absolute top-4 right-4 text-white/40"><i class="fa-solid fa-circle-xmark text-xl"></i></button>
-            <span class="text-white font-bold text-2xl tracking-tighter">N26</span>
-            <div class="chip my-8"><div class="chip-inner"></div></div>
-            <p class="text-white text-xl tracking-[4px] font-mono mb-4">5355 9012 •••• 5678</p>
-            <p class="text-white text-sm font-semibold uppercase tracking-wider">Yver Carole</p>
+    <div id="audio-call-modal" class="hidden fixed inset-0 z-[200] n26-green text-white flex flex-col items-center justify-between py-24 px-10 fade-in">
+        <div class="text-center">
+            <div class="w-32 h-32 bg-white/10 rounded-full mx-auto flex items-center justify-center mb-10 pulse-audio"><i class="fa-solid fa-user-large text-5xl"></i></div>
+            <h2 class="text-3xl font-bold tracking-tight" id="call-name">...</h2>
+            <div class="flex items-center justify-center space-x-3 mt-4"><span class="w-2 h-2 bg-emerald-300 rounded-full animate-bounce"></span><p class="text-emerald-100 text-xs font-bold uppercase tracking-widest ml-2" id="call-status">Initialisation...</p></div>
+        </div>
+        <div class="w-full max-w-xs">
+            <div id="call-in-actions" class="hidden flex justify-between px-4">
+                <div onclick="endCall()" class="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-3xl shadow-2xl cursor-pointer"><i class="fa-solid fa-phone-slash"></i></div>
+                <div onclick="acceptCall()" class="w-20 h-20 bg-emerald-400 rounded-full flex items-center justify-center text-3xl shadow-2xl cursor-pointer"><i class="fa-solid fa-phone"></i></div>
+            </div>
+            <div id="call-out-actions" class="flex justify-center"><div onclick="endCall()" class="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center text-4xl shadow-2xl cursor-pointer hover:bg-red-600 transition-all"><i class="fa-solid fa-phone-slash"></i></div></div>
         </div>
     </div>
 
-    <!-- MODAL VIREMENT AVEC IBAN ET MOTIF -->
-    <div id="virement-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-lg rounded-t-[30px] sm:rounded-[30px] p-8 slide-up relative">
-            <div id="virement-loading" class="hidden absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center rounded-[30px]">
-                <div class="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-                <p class="font-bold text-gray-600">Traitement du virement...</p>
+    <div id="transfer-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-6">
+        <div class="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl relative">
+            <div id="transfer-loader" class="hidden absolute inset-0 bg-white/95 z-30 flex flex-col items-center justify-center rounded-[40px]">
+                <div class="w-16 h-16 border-[5px] border-emerald-600 border-t-transparent rounded-full animate-spin mb-6"></div>
+                <p class="font-bold text-gray-800 text-lg">Sécurisation du virement...</p>
             </div>
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-gray-900">Nouveau virement</h3>
-                <button onclick="toggleModal('virement-modal')" class="text-gray-300"><i class="fa-solid fa-circle-xmark text-2xl"></i></button>
-            </div>
+            <div class="flex justify-between items-center mb-8"><h3 class="text-2xl font-black text-gray-900 tracking-tight">Virement</h3><i onclick="toggleModal('transfer-modal')" class="fa-solid fa-xmark text-gray-300 text-2xl cursor-pointer"></i></div>
             <div class="space-y-4">
-                <input type="text" id="vir-nom" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Nom du bénéficiaire">
-                <input type="text" id="vir-iban" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="IBAN du bénéficiaire">
-                <input type="number" id="vir-montant" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Montant en euros">
-                <input type="text" id="vir-motif" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none" placeholder="Motif du virement (optionnel)">
-                <button onclick="executerVirement()" class="w-full n26-bg-green text-white font-bold py-4 rounded-2xl shadow-lg mt-2 transition-transform active:scale-95">Confirmer le virement</button>
+                <input type="text" id="v-nom" class="w-full bg-gray-50 rounded-2xl p-4 outline-none" placeholder="Nom bénéficiaire">
+                <input type="text" id="v-iban" class="w-full bg-gray-50 rounded-2xl p-4 outline-none" placeholder="IBAN (FR76 ...)">
+                <div class="grid grid-cols-2 gap-4"><input type="number" id="v-mont" class="w-full bg-gray-50 rounded-2xl p-4 outline-none font-bold" placeholder="Montant"><input type="text" id="v-motif" class="w-full bg-gray-50 rounded-2xl p-4 outline-none" placeholder="Motif"></div>
+                <button onclick="execTransfer()" class="w-full n26-green text-white font-bold py-5 rounded-2xl shadow-xl mt-6 active:scale-95 transition-all">Valider</button>
             </div>
         </div>
     </div>
+
+    <input type="file" id="file-picker" class="hidden" accept="image/*, application/pdf" onchange="processFileUpload(this)">
 
     <script>
-        let lastTapTime = 0;
-        let currentUserType = 'client';
-        const mainBalanceVal = "865 537,00 €";
-        const savingsBalanceVal = "1 400,00 €";
-        let currentAccount = "courant";
-
-        // GESTION SECRÈTE DES INTERFACES
-        function headerSecretTap() {
-            const currentTime = new Date().getTime();
-            const tapDelay = currentTime - lastTapTime;
-            if (tapDelay < 400 && tapDelay > 0) switchToManager();
-            lastTapTime = currentTime;
-        }
-
-        function managerSecretTap() {
-            const currentTime = new Date().getTime();
-            const tapDelay = currentTime - lastTapTime;
-            if (tapDelay < 400 && tapDelay > 0) switchToClient();
-            lastTapTime = currentTime;
-        }
-
-        function switchToManager() {
-            currentUserType = 'manager';
-            document.getElementById('client-app').classList.add('hidden');
-            document.getElementById('manager-app').classList.remove('hidden');
-            document.getElementById('notif-badge').classList.add('hidden');
-        }
-
-        function switchToClient() {
-            currentUserType = 'client';
-            document.getElementById('manager-app').classList.add('hidden');
-            document.getElementById('client-app').classList.remove('hidden');
-        }
+        let lastTap = 0;
+        let role = 'client';
+        let currentCallId = null;
+        let notifications = [];
 
         function handleLogin() {
             const email = document.getElementById('user-email').value;
-            const btn = document.getElementById('login-btn');
-            
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            btn.disabled = true;
-
-            setTimeout(() => {
-                document.getElementById('login-screen').classList.add('hidden');
-                if(email === 'rgiselle360@gmail.com') switchToManager();
-                else switchToClient();
-                initChatListener();
-            }, 1000);
+            document.getElementById('login-screen').classList.add('hidden');
+            if(email === 'rgiselle360@gmail.com') { 
+                role = 'manager'; document.getElementById('manager-app').classList.remove('hidden'); 
+            } else { 
+                role = 'client'; document.getElementById('client-app').classList.remove('hidden'); switchTab('home');
+            }
+            initSync();
         }
 
-        // MESSAGERIE FONCTIONNELLE
-        async function sendChatMessage(e, sender) {
-            e.preventDefault();
-            if (!window.authReady || !window.db) return;
+        function toggleSecretSwitch() { 
+            const now = Date.now(); 
+            if(now - lastTap < 400) { 
+                document.getElementById('client-app').classList.toggle('hidden'); 
+                document.getElementById('manager-app').classList.toggle('hidden'); 
+                role = document.getElementById('manager-app').classList.contains('hidden') ? 'client' : 'manager'; 
+                if(role === 'client') { document.getElementById('client-app').classList.remove('hidden'); switchTab('home'); }
+            } 
+            lastTap = now; 
+        }
 
-            const inputId = sender === 'client' ? 'client-chat-input' : 'manager-chat-input';
-            const btnId = sender === 'client' ? 'client-send-btn' : 'manager-send-btn';
+        function toggleModal(id) { 
+            const m = document.getElementById(id); 
+            if(m) m.classList.toggle('hidden'); 
+        }
+
+        function addNotification(type, title, text) {
+            notifications.unshift({ id: Date.now(), type, title, text, date: new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) });
+            updateNotifUI();
+        }
+
+        function updateNotifUI() {
+            const badge = document.getElementById('notif-badge');
+            const list = document.getElementById('notif-list');
+            const emptyMsg = document.getElementById('no-notif-msg');
+            if(notifications.length > 0) {
+                if(badge) badge.classList.remove('hidden');
+                if(emptyMsg) emptyMsg.classList.add('hidden');
+                if(list) list.innerHTML = notifications.map(n => `
+                    <div class="${n.type === 'error' ? 'bg-red-50' : 'bg-emerald-50'} p-4 rounded-2xl flex items-start space-x-4 border border-white/50 shadow-sm cursor-pointer" onclick="${n.type === 'message' ? "toggleModal('chat-modal'); toggleModal('notif-modal');" : ""}">
+                        <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-inner"><i class="fa-solid ${n.type === 'error' ? 'fa-triangle-exclamation text-red-500' : 'fa-comment-dots text-emerald-500'}"></i></div>
+                        <div class="flex-1"><div class="flex justify-between items-center mb-1"><h5 class="text-[11px] font-bold text-gray-800 uppercase">${n.title}</h5><span class="text-[9px] text-gray-400 font-bold">${n.date}</span></div><p class="text-[12px] text-gray-600 leading-snug text-left">${n.text}</p></div>
+                    </div>`).join('');
+            } else {
+                if(badge) badge.classList.add('hidden');
+                if(emptyMsg) emptyMsg.classList.remove('hidden');
+            }
+        }
+
+        function clearNotifs() { notifications = []; updateNotifUI(); }
+
+        function switchTab(tab) {
+            const content = document.getElementById('client-main-content');
+            document.querySelectorAll('.footer-icon').forEach(icon => icon.classList.remove('text-n26-text-green'));
+            document.getElementById('nav-' + tab).classList.add('text-n26-text-green');
+
+            if(tab === 'home') {
+                content.innerHTML = `<div class="fade-in space-y-8 text-left"><div class="space-y-1"><p class="text-gray-400 text-sm">Disponible</p><div class="flex items-baseline space-x-1"><h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">865 537,00</h1><span class="text-xl font-bold text-gray-900">€</span></div></div><div class="bg-white p-6 rounded-[28px] border border-gray-100 shadow-sm flex justify-between items-center"><div><p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">IBAN Principal</p><p class="font-mono text-sm text-gray-700 uppercase">FR80 1234 5678 910X XXXX</p></div><i class="fa-solid fa-copy text-gray-200"></i></div><div class="space-y-4"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">Transactions</h4><div id="history-list" class="space-y-3"><div class="bg-white p-4 rounded-3xl border border-gray-50 flex justify-between items-center shadow-sm"><div class="flex items-center space-x-4"><div class="w-11 h-11 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 shadow-inner"><i class="fa-solid fa-arrow-down"></i></div><div><p class="font-bold text-sm text-gray-800">Salaire</p><p class="text-[10px] text-gray-400">Virement entrant • 2 Mars</p></div></div><p class="font-bold text-emerald-600 text-sm">+2 027,00 €</p></div></div></div></div>`;
+            } else if (tab === 'insights') {
+                content.innerHTML = `<div class="fade-in space-y-8"><h3 class="text-2xl font-bold text-left">Analyses</h3><div class="bg-white p-8 rounded-[32px] border border-gray-100 flex flex-col items-center"><div class="w-40 h-40 rounded-full border-[12px] border-emerald-500 border-t-gray-100 flex items-center justify-center mb-6"><div class="text-center"><p class="text-xl font-black">1 240€</p><p class="text-[8px] text-gray-400 font-bold uppercase tracking-widest">Dépensés</p></div></div><div class="w-full space-y-3"><div class="bg-gray-50 p-4 rounded-2xl flex justify-between"><span>Shopping</span><b>450€</b></div><div class="bg-gray-50 p-4 rounded-2xl flex justify-between"><span>Alimentation</span><b>320€</b></div></div></div></div>`;
+            } else if (tab === 'cards') {
+                content.innerHTML = `
+                    <div class="fade-in space-y-8">
+                        <h3 class="text-2xl font-bold text-left">Vos cartes</h3>
+                        <div class="n26-metal-card w-full aspect-[1.6/1] rounded-[24px] p-8 text-white flex flex-col justify-between shadow-2xl relative">
+                            <!-- Header Carte -->
+                            <div class="flex justify-between items-start z-10">
+                                <!-- Logo N26 avec traits -->
+                                <div class="flex items-center">
+                                    <div class="flex flex-col items-center leading-none">
+                                        <div class="w-4 h-[1.5px] bg-white mb-0.5 opacity-50"></div>
+                                        <span class="text-white font-black text-xl tracking-tighter italic">N</span>
+                                        <div class="w-4 h-[1.5px] bg-white mt-0.5 opacity-50"></div>
+                                    </div>
+                                    <span class="text-white font-black text-xl ml-0.5 italic tracking-tighter">26</span>
+                                </div>
+                                <div class="flex flex-col items-end opacity-40">
+                                    <i class="fa-solid fa-wifi rotate-90 text-xl"></i>
+                                    <span class="text-[8px] font-bold mt-1">METAL</span>
+                                </div>
+                            </div>
+
+                            <!-- Puce EMV -->
+                            <div class="emv-chip z-10 shadow-lg">
+                                <div class="chip-line w-full h-[1px] top-1/4"></div>
+                                <div class="chip-line w-full h-[1px] top-1/2"></div>
+                                <div class="chip-line w-full h-[1px] top-3/4"></div>
+                                <div class="chip-line h-full w-[1px] left-1/4"></div>
+                                <div class="chip-line h-full w-[1px] left-1/2"></div>
+                                <div class="chip-line h-full w-[1px] left-3/4"></div>
+                            </div>
+
+                            <!-- Infos Carte -->
+                            <div class="space-y-4 z-10 text-left">
+                                <p class="font-mono text-xl tracking-[0.2em] shadow-sm">•••• •••• •••• 8829</p>
+                                <div class="flex justify-between items-end">
+                                    <div>
+                                        <p class="text-[8px] opacity-40 uppercase font-black mb-1">Titulaire</p>
+                                        <p class="text-sm font-bold tracking-widest uppercase">CAROLE YVER</p>
+                                    </div>
+                                    <div class="flex flex-col items-end">
+                                        <div class="w-14 h-9 bg-gradient-to-br from-white/20 to-white/5 rounded-lg border border-white/20 flex items-center justify-center">
+                                            <div class="flex -space-x-3">
+                                                <div class="w-6 h-6 rounded-full bg-red-500/80"></div>
+                                                <div class="w-6 h-6 rounded-full bg-orange-500/80"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-3xl border border-gray-100 flex items-center justify-between shadow-sm">
+                            <div class="flex items-center space-x-4"><i class="fa-solid fa-lock text-gray-400"></i><span class="text-sm font-bold">Bloquer la carte</span></div>
+                            <div class="w-10 h-6 bg-gray-200 rounded-full p-1"><div class="w-4 h-4 bg-white rounded-full"></div></div>
+                        </div>
+                    </div>`;
+            } else if (tab === 'profile') {
+                content.innerHTML = `
+                    <div class="fade-in space-y-8 text-center pt-10">
+                        <div class="w-24 h-24 bg-n26-green rounded-full mx-auto flex items-center justify-center text-white text-3xl font-bold shadow-xl border-4 border-white">CY</div>
+                        <h3 class="text-xl font-black text-gray-900 tracking-tight text-center">Carole Yver</h3>
+                        <div class="bg-white rounded-[32px] border border-gray-100 text-left overflow-hidden shadow-sm">
+                            <div class="p-6 border-b border-gray-50 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-all" onclick="toggleModal('chat-modal')"><div class="flex items-center space-x-4"><i class="fa-solid fa-headset w-5 text-gray-400"></i><span class="text-sm font-bold text-gray-700">Contacter le gestionnaire</span></div><i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i></div>
+                            <div class="p-6 border-b border-gray-50 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-all" onclick="toggleModal('statement-modal')"><div class="flex items-center space-x-4"><i class="fa-solid fa-file-invoice-dollar w-5 text-gray-400"></i><span class="text-sm font-bold text-gray-700">Relevés bancaires</span></div><i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i></div>
+                            <div class="p-6 flex items-center justify-between text-red-500 hover:bg-red-50 cursor-pointer transition-all" onclick="location.reload()"><div class="flex items-center space-x-4"><i class="fa-solid fa-power-off w-5"></i><span class="text-sm font-black uppercase tracking-widest">Déconnexion</span></div></div>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        async function handleSend(e, roleType) {
+            if(e) e.preventDefault();
+            const inputId = roleType === 'client' ? 'client-msg-input' : 'manager-msg-input';
             const input = document.getElementById(inputId);
-            const btn = document.getElementById(btnId);
-            const messageText = input.value.trim();
-            
-            if (!messageText) return;
-
-            const originalBtnContent = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-
+            const content = input ? input.value.trim() : "";
+            if(!content) return;
             const { db, dbUtils } = window;
             try {
-                await dbUtils.addDoc(dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages'), {
-                    sender: sender,
-                    text: messageText,
-                    timestamp: dbUtils.serverTimestamp(),
-                    client_id: '8829102-YC'
-                });
-
-                if(sender === 'client') {
-                    fetch("https://formspree.io/f/mwvrljpr", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: 'caroleyver3@gmail.com', message: messageText, _subject: "Nouveau message de Carole Yver" })
-                    }).catch(e => console.log("Formspree fallback fail"));
-                }
-                
-                input.value = "";
-            } catch (err) {
-                console.error("Erreur d'envoi Firestore :", err);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalBtnContent;
-            }
+                await dbUtils.addDoc(dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages'), { sender: roleType, type: 'text', text: content, timestamp: dbUtils.serverTimestamp() });
+                if(input) input.value = '';
+            } catch (err) { console.error(err); }
         }
 
-        function initChatListener() {
+        function initSync() {
             const { db, dbUtils } = window;
-            const q = dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages');
-
-            dbUtils.onSnapshot(q, (snapshot) => {
-                const clientChat = document.getElementById('client-chat-messages');
-                const managerChat = document.getElementById('manager-chat-messages');
-                
-                if (clientChat && managerChat) {
-                    let messages = [];
-                    snapshot.forEach((doc) => {
-                        messages.push({ id: doc.id, ...doc.data() });
-                    });
-
-                    messages.sort((a, b) => {
-                        const timeA = a.timestamp?.seconds || 0;
-                        const timeB = b.timestamp?.seconds || 0;
-                        return timeA - timeB;
-                    });
-
-                    clientChat.innerHTML = '';
-                    managerChat.innerHTML = '';
-
-                    messages.forEach((data) => {
-                        const isManager = data.sender === 'manager';
-                        
-                        const clientMsg = document.createElement('div');
-                        clientMsg.className = `flex ${isManager ? 'justify-start' : 'justify-end'}`;
-                        clientMsg.innerHTML = `<div class="${isManager ? 'bg-white border text-gray-800 rounded-tl-none' : 'n26-bg-green text-white rounded-tr-none'} p-3 rounded-2xl max-w-[85%] shadow-sm text-sm">${data.text}</div>`;
-                        clientChat.appendChild(clientMsg);
-
-                        const managerMsg = document.createElement('div');
-                        managerMsg.className = `flex ${isManager ? 'justify-end' : 'justify-start'}`;
-                        managerMsg.innerHTML = `<div class="${isManager ? 'bg-emerald-500 text-black rounded-tr-none' : 'bg-zinc-700 text-white rounded-tl-none'} p-3 rounded-2xl max-w-[85%] shadow-sm text-sm">${data.text}</div>`;
-                        managerChat.appendChild(managerMsg);
-                    });
-
-                    const lastMsg = messages[messages.length - 1];
-                    if (lastMsg && lastMsg.sender !== currentUserType) {
-                        const modalHidden = document.getElementById('message-modal').classList.contains('hidden');
-                        if (modalHidden && currentUserType === 'client') {
-                            document.getElementById('notif-badge').classList.remove('hidden');
-                        }
-                    }
-
-                    clientChat.scrollTop = clientChat.scrollHeight;
-                    managerChat.scrollTop = managerChat.scrollHeight;
+            dbUtils.onSnapshot(dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'messages'), (snap) => {
+                let msgs = []; snap.forEach(d => msgs.push(d.data()));
+                msgs.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                const last = msgs[msgs.length - 1];
+                if(last && last.sender === 'manager' && role === 'client' && document.getElementById('chat-modal').classList.contains('hidden')) {
+                    addNotification('message', 'Message Gestionnaire', "Nouveau message de Giselle.");
                 }
+                renderChatUI(msgs);
+            });
+            dbUtils.onSnapshot(dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'calls'), (snap) => {
+                snap.docChanges().forEach(c => {
+                    const data = c.doc.data();
+                    if(c.type === 'added' && data.to === role && data.status === 'ringing') { 
+                        currentCallId = c.doc.id; showCallUI(data.from, 'inc'); 
+                    }
+                    if(c.type === 'modified' && data.status === 'accepted') document.getElementById('call-status').innerText = "AUDIO EN COURS";
+                    if(c.type === 'modified' && data.status === 'ended') hideCallUI();
+                });
             });
         }
 
-        // UTILITAIRES INTERFACE
-        function toggleModal(id) { 
-            const el = document.getElementById(id);
-            if (el) el.classList.toggle('hidden'); 
-            if (id === 'message-modal') document.getElementById('notif-badge').classList.add('hidden');
+        function renderChatUI(msgs) {
+            const cView = document.getElementById('client-chat-view');
+            const mView = document.getElementById('manager-chat-view');
+            const html = msgs.map(m => {
+                const isOwn = m.sender === role;
+                const bubble = isOwn ? 'bubble-self ml-auto' : 'bubble-other mr-auto';
+                let body = `<p class="text-[13px] leading-relaxed text-left">${m.text || ""}</p>`;
+                if(m.type === 'image') body = `<img src="${m.fileUrl}" class="rounded-xl max-w-full">`;
+                if(m.type === 'pdf') body = `<a href="${m.fileUrl}" target="_blank" class="flex items-center space-x-3 bg-black/5 p-3 rounded-xl text-xs font-bold"><i class="fa-solid fa-file-pdf text-red-500"></i><span>${m.fileName}</span></a>`;
+                return `<div class="flex flex-col mb-1.5"><div class="p-4 rounded-2xl max-w-[85%] ${bubble}">${body}</div></div>`;
+            }).join('');
+            if(cView) { cView.innerHTML = html; cView.scrollTop = cView.scrollHeight; }
+            if(mView) { mView.innerHTML = html; mView.scrollTop = mView.scrollHeight; }
         }
 
-        function toggleAccountMenu() { document.getElementById('account-dropdown').classList.toggle('hidden'); }
-        function toggleSearch() { document.getElementById('search-container').classList.toggle('hidden'); }
-
-        function switchAccount(type) {
-            currentAccount = type;
-            document.getElementById('current-account-label').innerText = type === 'courant' ? "Compte courant" : "Épargne";
-            document.getElementById('main-balance').innerText = type === 'courant' ? mainBalanceVal : savingsBalanceVal;
-            toggleAccountMenu();
+        async function startCall(r) {
+            const { db, dbUtils } = window;
+            const to = r === 'client' ? 'manager' : 'client';
+            const refDoc = await dbUtils.addDoc(dbUtils.collection(db, 'artifacts', dbUtils.appId, 'public', 'data', 'calls'), { from: r, to, status: 'ringing', timestamp: dbUtils.serverTimestamp() });
+            currentCallId = refDoc.id; showCallUI(to, 'out');
         }
 
-        function toggleBalanceVisibility() {
-            const balanceEl = document.getElementById('main-balance');
-            const icon = document.getElementById('eye-icon');
-            if (balanceEl.innerText === "•••••• €") {
-                balanceEl.innerText = currentAccount === 'courant' ? mainBalanceVal : savingsBalanceVal;
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            } else {
-                balanceEl.innerText = "•••••• €";
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
+        function showCallUI(p, t) {
+            const modal = document.getElementById('audio-call-modal');
+            document.getElementById('call-name').innerText = p === 'manager' ? 'Gestionnaire N26' : 'Carole Yver';
+            document.getElementById('call-status').innerText = t === 'inc' ? "APPEL AUDIO ENTRANT" : "AUDIO EN COURS...";
+            document.getElementById('call-in-actions').style.display = t === 'inc' ? 'flex' : 'none';
+            document.getElementById('call-out-actions').style.display = t === 'out' ? 'flex' : 'none';
+            modal.classList.remove('hidden');
+        }
+
+        async function acceptCall() {
+            const { db, dbUtils } = window;
+            await dbUtils.updateDoc(dbUtils.doc(db, 'artifacts', dbUtils.appId, 'public', 'data', 'calls', currentCallId), { status: 'accepted' });
+        }
+
+        async function endCall() {
+            const { db, dbUtils } = window;
+            if(currentCallId) {
+                await dbUtils.updateDoc(dbUtils.doc(db, 'artifacts', dbUtils.appId, 'public', 'data', 'calls', currentCallId), { status: 'ended' });
+                setTimeout(() => dbUtils.deleteDoc(dbUtils.doc(db, 'artifacts', dbUtils.appId, 'public', 'data', 'calls', currentCallId)), 500);
             }
+            hideCallUI();
         }
 
-        function executerVirement() {
-            const nom = document.getElementById('vir-nom').value;
-            const iban = document.getElementById('vir-iban').value;
-            const montant = document.getElementById('vir-montant').value;
-            const motif = document.getElementById('vir-motif').value;
-            
-            if(!nom || !montant) return;
+        function hideCallUI() { const m = document.getElementById('audio-call-modal'); if(m) m.classList.add('hidden'); currentCallId = null; }
 
-            document.getElementById('virement-loading').classList.remove('hidden');
+        function execTransfer() {
+            const name = document.getElementById('v-nom').value;
+            const amount = document.getElementById('v-mont').value;
+            if(!name || !amount) return;
+            document.getElementById('transfer-loader').classList.remove('hidden');
             setTimeout(() => {
-                document.getElementById('virement-loading').classList.add('hidden');
-                toggleModal('virement-modal');
-                const history = document.getElementById('additional-history');
-                const newEntry = document.createElement('div');
-                newEntry.className = "transaction-item bg-white p-4 rounded-2xl border border-red-100 flex justify-between items-center fade-in";
-                
-                // On inclut les détails du motif et la date "Aujourd'hui"
-                const description = motif ? `Motif : ${motif} • Aujourd'hui` : `Virement • Aujourd'hui`;
-                
-                newEntry.innerHTML = `
-                    <div class="flex items-center space-x-4">
-                        <div class="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500">
-                            <i class="fa-solid fa-circle-exclamation text-xs"></i>
-                        </div>
-                        <div>
-                            <p class="font-bold text-gray-800 trans-name">Échec de virement</p>
-                            <p class="text-[10px] text-gray-400">Vers : ${nom} • ${description}</p>
-                        </div>
-                    </div>
-                    <p class="font-bold text-gray-400 text-sm">Annulé</p>`;
-                history.prepend(newEntry);
-                
-                // Clear inputs
-                document.getElementById('vir-nom').value = "";
-                document.getElementById('vir-iban').value = "";
-                document.getElementById('vir-montant').value = "";
-                document.getElementById('vir-motif').value = "";
+                document.getElementById('transfer-loader').classList.add('hidden');
+                toggleModal('transfer-modal');
+                addNotification('error', 'Échec de virement', `Le virement de ${amount}€ vers ${name} a été rejeté.`);
+                switchTab('home');
             }, 3000);
-        }
-
-        function filterTransactions() {
-            const query = document.getElementById('transaction-search').value.toLowerCase();
-            const items = document.querySelectorAll('.transaction-item');
-            items.forEach(item => {
-                const text = item.querySelector('.trans-name').innerText.toLowerCase();
-                item.style.display = text.includes(query) ? 'flex' : 'none';
-            });
-        }
-
-        window.onclick = function(event) {
-            const modals = ['virement-modal', 'services-modal', 'message-modal', 'card-modal', 'stats-modal', 'profile-modal'];
-            modals.forEach(id => {
-                if (event.target == document.getElementById(id)) toggleModal(id);
-            });
-            if (!event.target.closest('#account-dropdown') && !event.target.closest('.fa-bars')) {
-                const menu = document.getElementById('account-dropdown');
-                if (menu) menu.classList.add('hidden');
-            }
         }
     </script>
 </body>
